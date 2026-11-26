@@ -1,0 +1,53 @@
+name: Wrong match or file not recognized
+description: A file is missing from the library, grouped wrongly, or shows the wrong movie or show.
+labels: ["matching"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tip: you can fix a single wrong title yourself with **Fix match** on its details page.
+        Reporting it here helps improve matching for everyone.
+
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What's wrong?
+      options:
+        - A file doesn't appear in the library
+        - Matched to the wrong movie or show
+        - Episodes are grouped into the wrong show or season
+        - Wrong season or episode number
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: paths
+    attributes:
+      label: File and folder names
+      description: |
+        The path of the file inside your media folder. The exact names matter most, so please
+        copy them. You can replace private folder names above the media folder.
+      placeholder: |
+        TV Shows/The Office (US)/Season 2/The.Office.US.S02E01.720p.mkv
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should it be?
+      description: The correct title, year, and season or episode. A TMDB link is ideal.
+      placeholder: "The Office (2005), Season 2, Episode 1. https://www.themoviedb.org/tv/2316"
+    validations:
+      required: true
+
+  - type: input
+    id: popcorn-version
+    attributes:
+      label: Popcorn version
+      description: Shown in Settings → About.
+      placeholder: "0.1.0"
+    validations:
+      required: true

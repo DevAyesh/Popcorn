@@ -1,0 +1,89 @@
+name: Bug report
+description: Something doesn't work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please search the
+        [existing issues](https://github.com/dizzpy/Popcorn/issues) first.
+
+        If a file isn't recognized or is matched to the wrong movie or show, please use the
+        **Wrong match or file not recognized** form instead.
+
+        **Security problems must not be reported here.** See [SECURITY.md](https://github.com/dizzpy/Popcorn/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a TV show
+        2. Click "Play next"
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: popcorn-version
+    attributes:
+      label: Popcorn version
+      description: Shown in Settings → About.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Apple menu → About This Mac.
+      placeholder: "macOS 15.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Library or scanning
+        - Metadata (posters, details)
+        - Player
+        - Search
+        - Settings or onboarding
+        - Installation or launch
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Optional, but very helpful. Quit Popcorn, then start it from Terminal with
+        `/Applications/Popcorn.app/Contents/MacOS/popcorn`, reproduce the problem, and paste the output.
+        Remove any file paths you don't want to share.
+      render: text
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: Drag images here.
