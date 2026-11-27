@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Installs a Popcorn .deb or .rpm on a clean system (meant for a throwaway container)
+# Installs a Popcorn .deb, .rpm, or .tar.gz on a clean system (meant for a throwaway container)
 # and checks that every library it needs, including the dlopen()ed libmpv, resolves.
 #
-# Usage: scripts/verify-linux-install.sh path/to/package.{deb,rpm}
+# Usage: scripts/verify-linux-install.sh path/to/package.{deb,rpm,tar.gz}
 # Example: docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 scripts/verify-linux-install.sh dist/linux/x.deb
 set -euo pipefail
 
-PACKAGE="${1:?usage: $0 path/to/package.{deb,rpm}}"
+PACKAGE="${1:?usage: $0 path/to/package.{deb,rpm,tar.gz}}"
 [[ -s "$PACKAGE" ]] || { echo "error: $PACKAGE is missing or empty" >&2; exit 1; }
 case "$PACKAGE" in /*) ;; *) PACKAGE="./$PACKAGE" ;; esac
 
@@ -18,6 +18,21 @@ case "$PACKAGE" in
     ;;
   *.rpm)
     dnf install -y -q "$PACKAGE"
+    ;;
+  *.tar.gz)
+    if command -v pacman >/dev/null 2>&1; then
+      pacman -Syu --noconfirm --needed gtk3 webkit2gtk-4.1 mpv hicolor-icon-theme >/dev/null
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y -q gtk3 webkit2gtk4.1 mpv-libs
+    elif command -v apt-get >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq
+      apt-get install -y -qq libgtk-3-0 libwebkit2gtk-4.1-0 libmpv2
+    fi
+    TMP_TAR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_TAR"' EXIT
+    tar -xzf "$PACKAGE" -C "$TMP_TAR"
+    PREFIX=/usr "$TMP_TAR"/popcorn-*/install.sh --no-check
     ;;
   *)
     echo "error: unsupported package type: $PACKAGE" >&2
@@ -37,6 +52,7 @@ if [[ -n "$missing" ]]; then
 fi
 
 # libmpv is loaded at runtime, so ldd on the binary cannot see it.
+export PATH="$PATH:/usr/sbin:/sbin"
 ldconfig
 LIBMPV="$(ldconfig -p | sed -n 's/^[[:space:]]*libmpv\.so\.2[[:space:]].*=> //p' | head -n 1)"
 if [[ -z "$LIBMPV" ]]; then
