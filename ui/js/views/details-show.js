@@ -8,6 +8,7 @@ import {
   h,
   icon,
   iconButton,
+  IS_MAC,
   progressBar,
   progressRatio,
   resumeAt,
@@ -131,8 +132,11 @@ function episodeRow(show, episode, ctx) {
         tool('restart', `Start ${name} over`, 'episode-restart', () =>
           ctx.play(episode.file_id, null),
         ),
-      tool('folder', `Show ${name} in Finder`, 'episode-reveal', () =>
-        attempt(() => api.revealFile(episode.file_id)),
+      tool(
+        'folder',
+        IS_MAC ? `Show ${name} in Finder` : `Show ${name} in file manager`,
+        'episode-reveal',
+        () => attempt(() => api.revealFile(episode.file_id)),
       ),
       watched,
     ),
