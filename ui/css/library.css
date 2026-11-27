@@ -112,7 +112,9 @@
 @media (max-width: 1100px) {
   .strip-item { width: 118px; }
   .search input { width: 180px; }
+  .search.search-wide input { width: 204px; }
   .search input:focus { width: 240px; }
+  .search.search-wide input:focus { width: 256px; }
   .header { gap: 18px; }
 }
 /* The film strip would collide with the hero text. */
