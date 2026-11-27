@@ -8,12 +8,17 @@ pub mod commands;
 #[cfg(target_os = "macos")]
 #[path = "embed_macos.rs"]
 mod embed;
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+#[path = "embed_linux.rs"]
+mod embed;
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[path = "embed_unsupported.rs"]
 mod embed;
 mod ffi;
 #[cfg(target_os = "macos")]
 mod gl;
+#[cfg(target_os = "linux")]
+mod gl_linux;
 mod keys;
 mod model;
 mod mpv;
@@ -296,6 +301,14 @@ fn fallback_keys(app: AppHandle, session: std::sync::Weak<Session>) -> embed::Ke
     })
 }
 
+/// Prepares the native video host container on platforms that need setup at startup.
+pub fn setup(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    embed::setup_window(app);
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+}
+
 /// Saves progress when the main window is closed, and follows its scale.
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     if window.label() != "main" {
@@ -323,3 +336,5 @@ pub fn on_run_event(app: &AppHandle, event: &RunEvent) {
 
 #[cfg(all(test, target_os = "macos"))]
 mod engine_tests;
+#[cfg(all(test, target_os = "linux"))]
+mod linux_tests;

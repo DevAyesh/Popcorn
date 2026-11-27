@@ -72,11 +72,14 @@ fn report(app: &AppHandle, label: &str) {
     };
     let read = |name| session.mpv.get_string(name).unwrap_or_default();
     log::info!(
-        "smoke [{label}] time={} pause={} hwdec={} video-out={} vo-drops={} avsync={}",
+        "smoke [{label}] time={} pause={} hwdec={} video-out={} ao={} vol={} mute={} vo-drops={} avsync={}",
         read("time-pos"),
         read("pause"),
         read("hwdec-current"),
         read("current-vo"),
+        read("current-ao"),
+        read("volume"),
+        read("mute"),
         read("frame-drop-count"),
         read("avsync"),
     );
@@ -86,24 +89,36 @@ fn report(app: &AppHandle, label: &str) {
     log::info!("smoke [{label}] keeping the display awake: {}", awake());
 }
 
-/// Whether macOS currently holds our display-sleep assertion.
+/// Whether the OS currently holds our display-sleep assertion.
 fn awake() -> bool {
-    let ours = format!("pid {}(", std::process::id());
-    std::process::Command::new("/usr/bin/pmset")
-        .args(["-g", "assertions"])
-        .output()
-        .is_ok_and(|output| {
-            String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .any(|line| line.contains(&ours) && line.contains("PreventUserIdleDisplaySleep"))
-        })
+    #[cfg(target_os = "macos")]
+    {
+        let ours = format!("pid {}(", std::process::id());
+        std::process::Command::new("/usr/bin/pmset")
+            .args(["-g", "assertions"])
+            .output()
+            .is_ok_and(|output| {
+                String::from_utf8_lossy(&output.stdout).lines().any(|line| {
+                    line.contains(&ours) && line.contains("PreventUserIdleDisplaySleep")
+                })
+            })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        super::embed::WakeLock::is_active()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        false
+    }
 }
 
 /// Presses keys in the fallback window, then closes it with Escape.
 fn fallback_keys(app: &AppHandle) -> AppResult<()> {
     let host = app.state::<PlayerHost>();
     let surface = host.require()?.surface().ok_or(AppError::NotFound)?;
-    for (code, characters, label) in [
+    #[cfg(target_os = "macos")]
+    let sequence = [
         (49, c" ", "SPACE"),
         (49, c" ", "SPACE again"),
         (124, c"\u{f703}", "RIGHT"),
@@ -111,7 +126,18 @@ fn fallback_keys(app: &AppHandle) -> AppResult<()> {
         (46, c"m", "m"),
         (46, c"m", "m again"),
         (3, c"f", "f again"),
-    ] {
+    ];
+    #[cfg(not(target_os = "macos"))]
+    let sequence = [
+        (0x0020, c" ", "SPACE"),
+        (0x0020, c" ", "SPACE again"),
+        (0xff53, c"", "RIGHT"),
+        (0x0066, c"f", "f"),
+        (0x006d, c"m", "m"),
+        (0x006d, c"m", "m again"),
+        (0x0066, c"f", "f again"),
+    ];
+    for (code, characters, label) in sequence {
         surface.press_key(app, code, characters);
         pause(900);
         log::info!("smoke: pressed {label}");
@@ -119,7 +145,10 @@ fn fallback_keys(app: &AppHandle) -> AppResult<()> {
         let full = surface.is_window_fullscreen();
         log::info!("smoke: window full screen: {full}");
     }
+    #[cfg(target_os = "macos")]
     surface.press_key(app, 53, c"\x1b");
+    #[cfg(not(target_os = "macos"))]
+    surface.press_key(app, 0xff1b, c"\x1b");
     pause(1500);
     log::info!(
         "smoke: after Escape, session open: {}, awake: {}",
@@ -214,6 +243,28 @@ fn run(app: &AppHandle, media: PathBuf) -> AppResult<()> {
 
     let window = app.get_webview_window("main").ok_or(AppError::NotFound)?;
     if opened.embedded {
+        {
+            let mpv = host.require()?.mpv.clone();
+            mpv.set_volume(45.0)?;
+            mpv.toggle_mute()?;
+            pause(400);
+            report(app, "volume+mute");
+            mpv.toggle_mute()?;
+            mpv.set_volume(100.0)?;
+        }
+        window.set_fullscreen(true)?;
+        pause(800);
+        log::info!(
+            "smoke: embedded fullscreen={}",
+            window.is_fullscreen().unwrap_or(false)
+        );
+        report(app, "embedded fullscreen");
+        window.set_fullscreen(false)?;
+        pause(800);
+        log::info!(
+            "smoke: embedded unfullscreen={}",
+            !window.is_fullscreen().unwrap_or(true)
+        );
         let size = window.inner_size()?;
         window.set_size(tauri::PhysicalSize::new(
             size.width - 200,
@@ -249,6 +300,27 @@ fn run(app: &AppHandle, media: PathBuf) -> AppResult<()> {
     host.close(app);
     report(app, "closed");
     stored(app, "final", first)?;
-    pause(1000);
+
+    let bad_path = state.data_dir.join("smoke-corrupt.mkv");
+    std::fs::write(&bad_path, b"not a valid video file").map_err(AppError::Io)?;
+    let bad_id = {
+        let db = state.db();
+        let title_id: i64 =
+            db.query_row("SELECT title_id FROM files WHERE id = ?1", [first], |r| {
+                r.get(0)
+            })?;
+        db.execute(
+            "INSERT INTO files (path, title_id, size, mtime, added_at) VALUES (?1, ?2, 22, 0, 1)",
+            rusqlite::params![bad_path.to_string_lossy().as_ref(), title_id],
+        )?;
+        db.last_insert_rowid()
+    };
+    host.open(app, bad_id, None)?;
+    pause(1500);
+    host.close(app);
+    let _ = std::fs::remove_file(&bad_path);
+    let missing_err = host.open(app, bad_id, None).unwrap_err();
+    log::info!("smoke: missing file rejected: {missing_err}");
+    pause(500);
     Ok(())
 }

@@ -3,8 +3,12 @@
 //! There is no link-time dependency on libmpv, so the app builds without it.
 //! Types and constants follow `mpv/client.h`, `render.h` and `render_gl.h`.
 
-use std::ffi::{c_char, c_int, c_void, CStr, CString};
+#[cfg(unix)]
+use std::ffi::CString;
+use std::ffi::{c_char, c_int, c_void, CStr};
+#[cfg(unix)]
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::sync::OnceLock;
 
 /// `mpv_handle`, only ever used behind a pointer.
@@ -89,6 +93,10 @@ pub const RENDER_PARAM_API_TYPE: c_int = 1;
 pub const RENDER_PARAM_OPENGL_INIT_PARAMS: c_int = 2;
 pub const RENDER_PARAM_OPENGL_FBO: c_int = 3;
 pub const RENDER_PARAM_FLIP_Y: c_int = 4;
+#[cfg(target_os = "linux")]
+pub const RENDER_PARAM_X11_DISPLAY: c_int = 8;
+#[cfg(target_os = "linux")]
+pub const RENDER_PARAM_WL_DISPLAY: c_int = 9;
 pub const RENDER_PARAM_BLOCK_FOR_TARGET_TIME: c_int = 12;
 pub const RENDER_PARAM_SKIP_RENDERING: c_int = 13;
 pub const RENDER_API_TYPE_OPENGL: &CStr = c"opengl";
@@ -98,10 +106,12 @@ pub type UpdateCallback = unsafe extern "C" fn(context: *mut c_void);
 macro_rules! api {
     ($($name:ident: fn($($arg:ty),*) $(-> $ret:ty)?;)*) => {
         /// The resolved entry points.
+        #[cfg_attr(not(unix), allow(dead_code))]
         pub struct Api {
             $(pub $name: unsafe extern "C" fn($($arg),*) $(-> $ret)?,)*
         }
 
+        #[cfg(unix)]
         impl Api {
             /// # Safety
             /// `library` must be a live handle to a libmpv 2.x dylib, which
@@ -145,21 +155,41 @@ api! {
     mpv_render_context_free: fn(*mut RenderHandle);
 }
 
+#[cfg(unix)]
 extern "C" {
-    fn dlopen(path: *const c_char, mode: c_int) -> *mut c_void;
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn dlopen(path: *const c_char, mode: c_int) -> *mut c_void;
     pub fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
     fn dlerror() -> *const c_char;
     fn setlocale(category: c_int, locale: *const c_char) -> *const c_char;
 }
 
+#[cfg(target_os = "macos")]
 pub const RTLD_NOW: c_int = 0x2;
+#[cfg(target_os = "macos")]
 pub const RTLD_LOCAL: c_int = 0x4;
+#[cfg(target_os = "macos")]
 /// macOS value of `LC_NUMERIC`.
 const LC_NUMERIC: c_int = 4;
-
+#[cfg(target_os = "macos")]
 const LIBRARY_NAME: &str = "libmpv.2.dylib";
 
+#[cfg(target_os = "linux")]
+pub const RTLD_LAZY: c_int = 0x1;
+#[cfg(target_os = "linux")]
+pub const RTLD_NOW: c_int = 0x2;
+#[cfg(target_os = "linux")]
+pub const RTLD_LOCAL: c_int = 0;
+#[cfg(target_os = "linux")]
+pub const RTLD_DEFAULT: *mut c_void = std::ptr::null_mut();
+#[cfg(target_os = "linux")]
+/// Linux glibc value of `LC_NUMERIC`.
+const LC_NUMERIC: c_int = 1;
+#[cfg(target_os = "linux")]
+const LIBRARY_NAME: &str = "libmpv.so.2";
+
 /// Opens a dynamic library, which then stays loaded for the life of the app.
+#[cfg(unix)]
 pub fn open_library(path: &CStr) -> Result<*mut c_void, String> {
     // SAFETY: the path is NUL-terminated. Loading runs the library's
     // initializers, so callers only pass trusted paths.
@@ -181,6 +211,7 @@ pub fn open_library(path: &CStr) -> Result<*mut c_void, String> {
 
 /// # Safety
 /// `library` must be a live dlopen handle and `name` must end in a NUL.
+#[cfg(unix)]
 unsafe fn symbol(library: *mut c_void, name: &str) -> Result<*mut c_void, String> {
     let found = dlsym(library, name.as_ptr().cast());
     if found.is_null() {
@@ -192,6 +223,7 @@ unsafe fn symbol(library: *mut c_void, name: &str) -> Result<*mut c_void, String
 
 /// Where libmpv may be loaded from, in order. Release builds only ever look
 /// inside the app bundle (`Contents/MacOS/popcorn` -> `Contents/Frameworks`).
+#[cfg(target_os = "macos")]
 fn candidates() -> Vec<PathBuf> {
     let bundled = std::env::current_exe().ok().and_then(|exe| {
         Some(
@@ -216,6 +248,36 @@ fn candidates() -> Vec<PathBuf> {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn candidates() -> Vec<PathBuf> {
+    let bundled = std::env::current_exe().ok().into_iter().flat_map(|exe| {
+        let dir = exe.parent().map(PathBuf::from);
+        let parent = dir.as_deref().and_then(|d| d.parent()).map(PathBuf::from);
+        [
+            dir.as_deref().map(|d| d.join("lib").join(LIBRARY_NAME)),
+            parent
+                .as_deref()
+                .map(|p| p.join("lib").join("popcorn").join(LIBRARY_NAME)),
+            parent.as_deref().map(|p| p.join("lib").join(LIBRARY_NAME)),
+        ]
+        .into_iter()
+        .flatten()
+    });
+    #[cfg(not(debug_assertions))]
+    {
+        bundled.collect()
+    }
+    #[cfg(debug_assertions)]
+    {
+        std::env::var_os("POPCORN_LIBMPV")
+            .map(PathBuf::from)
+            .into_iter()
+            .chain(bundled)
+            .collect()
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn load() -> Result<Api, String> {
     let mut problem = format!("{LIBRARY_NAME} was not found");
     for path in candidates() {
@@ -244,7 +306,52 @@ fn load() -> Result<Api, String> {
     Err(problem)
 }
 
+#[cfg(target_os = "linux")]
+fn load() -> Result<Api, String> {
+    let mut problem = format!("{LIBRARY_NAME} was not found");
+    for path in candidates() {
+        if !path.is_file() {
+            continue;
+        }
+        let Ok(c_path) = CString::new(path.as_os_str().as_encoded_bytes()) else {
+            continue;
+        };
+        match open_library(&c_path) {
+            Ok(library) => {
+                // SAFETY: `library` was just opened and is never closed.
+                let api = unsafe { Api::resolve(library) }?;
+                log::info!("loaded {}", path.display());
+                return Ok(api);
+            }
+            Err(error) => {
+                log::warn!("could not load {}: {error}", path.display());
+                problem = error;
+            }
+        }
+    }
+    // Fall back to the distro SONAME resolved through ld.so.
+    match open_library(c"libmpv.so.2") {
+        Ok(library) => {
+            // SAFETY: `library` was just opened and is never closed.
+            let api = unsafe { Api::resolve(library) }?;
+            log::info!("loaded {LIBRARY_NAME} via system loader");
+            Ok(api)
+        }
+        Err(error) => Err(if problem.contains("was not found") {
+            error
+        } else {
+            problem
+        }),
+    }
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "linux"))))]
+fn load() -> Result<Api, String> {
+    Err("libmpv is not supported on this system yet".into())
+}
+
 /// Loads libmpv once. A failure is not cached, so it can be retried.
+#[cfg(unix)]
 pub fn api() -> Result<&'static Api, String> {
     static API: OnceLock<Api> = OnceLock::new();
     if let Some(api) = API.get() {
@@ -255,4 +362,9 @@ pub fn api() -> Result<&'static Api, String> {
     // string, and "C" is the default every program starts with.
     unsafe { setlocale(LC_NUMERIC, c"C".as_ptr()) };
     Ok(API.get_or_init(|| loaded))
+}
+
+#[cfg(not(unix))]
+pub fn api() -> Result<&'static Api, String> {
+    Err("libmpv is not supported on this system yet".into())
 }

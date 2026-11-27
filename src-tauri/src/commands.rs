@@ -260,15 +260,30 @@ pub fn set_title_watched(
 
 #[tauri::command(async)]
 pub fn reveal_file(state: State<'_, AppState>, file_id: i64) -> AppResult<()> {
+    #[cfg_attr(
+        not(any(target_os = "macos", target_os = "linux")),
+        allow(unused_variables)
+    )]
     let path = queries::file_path(&state.db(), file_id)?;
     #[cfg(target_os = "macos")]
     Command::new("/usr/bin/open").arg("-R").arg(path).status()?;
+    #[cfg(target_os = "linux")]
+    {
+        let target = std::path::Path::new(&path)
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new(&path));
+        Command::new("xdg-open").arg(target).status()?;
+    }
     Ok(())
 }
 
 /// Only these fixed pages can be opened from the UI.
 #[tauri::command(async)]
 pub fn open_external(target: String) -> AppResult<()> {
+    #[cfg_attr(
+        not(any(target_os = "macos", target_os = "linux")),
+        allow(unused_variables)
+    )]
     let url = match target.as_str() {
         "tmdb_api" => "https://www.themoviedb.org/settings/api",
         "tmdb" => "https://www.themoviedb.org",
@@ -277,5 +292,7 @@ pub fn open_external(target: String) -> AppResult<()> {
     };
     #[cfg(target_os = "macos")]
     Command::new("/usr/bin/open").arg(url).status()?;
+    #[cfg(target_os = "linux")]
+    Command::new("xdg-open").arg(url).status()?;
     Ok(())
 }

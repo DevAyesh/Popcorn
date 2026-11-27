@@ -42,7 +42,19 @@ pub const OPTIONS: &[MpvOption] = &[
     // Video is drawn through the render API into our own view.
     required("vo", "libmpv"),
     // Direct VideoToolbox decoding, then copy-back, then software.
+    #[cfg(target_os = "macos")]
     required("hwdec", "videotoolbox,videotoolbox-copy,no"),
+    // Linux GPU decoding (VAAPI/NVDEC/Vulkan), falling back to software.
+    #[cfg(target_os = "linux")]
+    required(
+        "hwdec",
+        "vaapi,vaapi-copy,nvdec,nvdec-copy,vulkan,vulkan-copy,no",
+    ),
+    // Never block GTK's main-thread render callback waiting for target display time.
+    #[cfg(target_os = "linux")]
+    required("video-timing-offset", "0"),
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    optional("hwdec", "auto-safe"),
     required("sub-auto", "fuzzy"),
     required("keep-open", "yes"),
     required("idle", "yes"),
