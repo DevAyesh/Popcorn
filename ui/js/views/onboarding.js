@@ -1,7 +1,7 @@
 // First launch: choose the media folder, then (optionally) add a TMDB key.
 
 import { api, errorMessage } from '../api.js';
-import { artwork, button, h, icon } from '../dom.js';
+import { artwork, button, DEVICE_LABEL, h, icon } from '../dom.js';
 import { state } from '../state.js';
 import { keyField } from '../components/key-field.js';
 import { attempt, toastError } from '../components/toast.js';
@@ -96,7 +96,7 @@ export default {
       h(
         'p',
         {},
-        'For posters and details. It stays on this Mac. ',
+        `For posters and details. It stays on ${DEVICE_LABEL}. `,
         h('button', {
           type: 'button',
           class: 'link link-accent',

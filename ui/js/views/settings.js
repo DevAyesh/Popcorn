@@ -1,5 +1,5 @@
 import { api, errorMessage } from '../api.js';
-import { button, h } from '../dom.js';
+import { button, DEVICE_LABEL, h } from '../dom.js';
 import { state } from '../state.js';
 import { currentTheme, setTheme, THEME_CHANGED } from '../theme.js';
 import { attempt, toast } from '../components/toast.js';
@@ -205,7 +205,7 @@ export default {
           ),
           setting(
             'Image cache',
-            'Posters and backdrops stored on this Mac.',
+            `Posters and backdrops stored on ${DEVICE_LABEL}.`,
             action(
               'Clear image cache',
               'clear-cache',

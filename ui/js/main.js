@@ -1,7 +1,7 @@
 // Router and bootstrap.
 
 import { api, errorMessage, listen } from './api.js';
-import { button, h, icon } from './dom.js';
+import { button, h, icon, SEARCH_SHORTCUT } from './dom.js';
 import { state } from './state.js';
 import { currentTheme, syncWindowTheme, THEME_CHANGED, toggleTheme } from './theme.js';
 import { moveFocus } from './components/keyboard-nav.js';
@@ -38,6 +38,8 @@ const DEBOUNCE_MAX_MS = 2000;
 const app = document.getElementById('app');
 const topbar = document.getElementById('topbar');
 const searchInput = document.getElementById('search');
+const searchShortcut = searchInput?.parentElement?.querySelector('kbd');
+if (searchShortcut) searchShortcut.textContent = SEARCH_SHORTCUT;
 
 /** The entry whose screen is in the page, which lags behind while loading. */
 let shown = null;

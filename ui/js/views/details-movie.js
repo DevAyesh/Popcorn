@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { button, formatResolution, formatRuntime, formatSize, formatTime, h, resumeAt } from '../dom.js';
+import { button, formatResolution, formatRuntime, formatSize, formatTime, h, resumeAt, REVEAL_LABEL } from '../dom.js';
 import {
   castSection,
   detailsPage,
@@ -63,7 +63,7 @@ function fileInfo(file, ctx, several) {
             dataset: { focusKey: `file-play:${file.file_id}` },
             onClick: () => ctx.play(file.file_id, resumeAt(file.position, file.duration)),
           }),
-          button('Show in Finder', {
+          button(REVEAL_LABEL, {
             variant: 'btn-quiet btn-sm',
             dataset: { focusKey: `file-reveal:${file.file_id}` },
             onClick: () => attempt(() => api.revealFile(file.file_id)),

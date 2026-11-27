@@ -1,7 +1,7 @@
 // What the movie and show detail screens share.
 
 import { api } from '../api.js';
-import { artwork, button, factList, FACES, h, hashOf, icon } from '../dom.js';
+import { artwork, button, factList, FACES, h, hashOf, icon, REVEAL_LABEL } from '../dom.js';
 import { state } from '../state.js';
 import { openFixMatch } from './fix-match.js';
 import { attempt } from './toast.js';
@@ -83,7 +83,7 @@ export function detailsPage(title, ctx, { facts, actions, extraCredit, sections 
 }
 
 export function revealButton(fileId, ctx) {
-  return button('Show in Finder', {
+  return button(REVEAL_LABEL, {
     icon: 'folder',
     variant: 'btn-quiet',
     dataset: { focusKey: 'details:reveal' },

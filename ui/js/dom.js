@@ -8,6 +8,10 @@ import { motif } from './components/motif.js';
 /** The number of `.art-pN` and `.face-pN` classes in tokens.css. */
 const PALETTES = 12;
 export const FACES = 6;
+export const IS_MAC = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+export const REVEAL_LABEL = IS_MAC ? 'Show in Finder' : 'Show in file manager';
+export const DEVICE_LABEL = IS_MAC ? 'this Mac' : 'this computer';
+export const SEARCH_SHORTCUT = IS_MAC ? '⌘K' : 'Ctrl+K';
 
 export function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
