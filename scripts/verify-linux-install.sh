@@ -6,7 +6,11 @@
 # Example: docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 scripts/verify-linux-install.sh dist/linux/x.deb
 set -euo pipefail
 
-PACKAGE="${1:?usage: $0 path/to/package.{deb,rpm,tar.gz}}"
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 path/to/package" >&2
+  exit 1
+fi
+PACKAGE="$1"
 [[ -s "$PACKAGE" ]] || { echo "error: $PACKAGE is missing or empty" >&2; exit 1; }
 case "$PACKAGE" in /*) ;; *) PACKAGE="./$PACKAGE" ;; esac
 
@@ -14,20 +18,20 @@ case "$PACKAGE" in
   *.deb)
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
-    apt-get install -y -qq "$PACKAGE"
+    apt-get -o APT::Sandbox::User=root install -y -qq "$PACKAGE"
     ;;
   *.rpm)
     dnf install -y -q "$PACKAGE"
     ;;
   *.tar.gz)
     if command -v pacman >/dev/null 2>&1; then
-      pacman -Syu --noconfirm --needed gtk3 webkit2gtk-4.1 mpv hicolor-icon-theme >/dev/null
+      pacman -Syu --noconfirm --needed tar gzip gtk3 webkit2gtk-4.1 mpv hicolor-icon-theme >/dev/null
     elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y -q gtk3 webkit2gtk4.1 mpv-libs
+      dnf install -y -q tar gzip gtk3 webkit2gtk4.1 mpv-libs
     elif command -v apt-get >/dev/null 2>&1; then
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -qq
-      apt-get install -y -qq libgtk-3-0 libwebkit2gtk-4.1-0 libmpv2
+      apt-get -o APT::Sandbox::User=root install -y -qq tar gzip libgtk-3-0 libwebkit2gtk-4.1-0 libmpv2
     fi
     TMP_TAR="$(mktemp -d)"
     trap 'rm -rf "$TMP_TAR"' EXIT
