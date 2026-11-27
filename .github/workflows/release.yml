@@ -156,17 +156,12 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy --target x86_64-unknown-linux-gnu
           rustup default stable
 
+      # Keys on the OS, rustc version and Cargo.lock, and prunes stale build output.
       - name: Cache Cargo dependencies
-        uses: actions/cache@v6
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            src-tauri/target
-          key: cargo-${{ runner.os }}-${{ runner.arch }}-stable-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-${{ runner.arch }}-stable-
+          workspaces: src-tauri -> target
+          prefix-key: linux-x86_64
 
       - name: Cache tauri-cli
         id: tauri-cli
@@ -186,23 +181,34 @@ jobs:
           cargo clippy --all-targets --locked -- -D warnings
           cargo test --locked
 
+      # Builds .deb and .rpm into dist/linux and fails if the binary needs glibc newer than 2.39.
       - name: Package
         run: scripts/package-linux.sh
 
-      - name: Verify artifact
+      - name: Verify artifacts
         run: |
           shopt -s nullglob
-          files=(src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb)
-          test "${#files[@]}" -gt 0
-          for f in "${files[@]}"; do
-            test -s "$f"
-            ls -lh "$f"
-          done
+          debs=(dist/linux/*.deb)
+          rpms=(dist/linux/*.rpm)
+          test "${#debs[@]}" -eq 1
+          test "${#rpms[@]}" -eq 1
+          test -s "${debs[0]}"
+          test -s "${rpms[0]}"
+          ls -lh dist/linux
+
+      # Install each package on a clean system and check that every library resolves.
+      - name: Test .deb install (Ubuntu 24.04)
+        run: docker run --rm -v "$PWD:/w:ro" -w /w ubuntu:24.04 scripts/verify-linux-install.sh dist/linux/*.deb
+
+      - name: Test .rpm install (Fedora)
+        run: docker run --rm -v "$PWD:/w:ro" -w /w fedora:latest scripts/verify-linux-install.sh dist/linux/*.rpm
 
       - uses: actions/upload-artifact@v7
         with:
           name: Popcorn-linux
-          path: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+          path: |
+            dist/linux/*.deb
+            dist/linux/*.rpm
           if-no-files-found: error
 
   release:
@@ -224,12 +230,22 @@ jobs:
           name: Popcorn-linux
           path: dist/linux
 
-      - name: Verify release assets
+      # Collect every asset in one flat folder and publish checksums next to them.
+      - name: Prepare release assets
         run: |
           shopt -s nullglob
-          assets=(dist/macos/*.dmg dist/linux/*.deb)
-          test "${#assets[@]}" -ge 2
-          ls -lh "${assets[@]}"
+          dmgs=(dist/macos/*.dmg)
+          debs=(dist/linux/*.deb)
+          rpms=(dist/linux/*.rpm)
+          test "${#dmgs[@]}" -eq 1
+          test "${#debs[@]}" -eq 1
+          test "${#rpms[@]}" -eq 1
+          mkdir -p release
+          cp "${dmgs[@]}" "${debs[@]}" "${rpms[@]}" release/
+          cd release
+          sha256sum -- *.dmg *.deb *.rpm > SHA256SUMS
+          cat SHA256SUMS
+          ls -lh
 
       - name: Create or update the release
         env:
@@ -237,8 +253,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          shopt -s nullglob
-          assets=(dist/macos/*.dmg dist/linux/*.deb)
+          assets=(release/*.dmg release/*.deb release/*.rpm release/SHA256SUMS)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --clobber
           else

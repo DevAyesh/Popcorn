@@ -1,6 +1,7 @@
 /src-tauri/target/
 /src-tauri/gen/schemas/
 /build/
+/dist/
 /vendor/
 .DS_Store
 *.dmg
