@@ -13,11 +13,26 @@ pub enum KeyAction {
 }
 
 /// `NSEventModifierFlags`.
+#[cfg(target_os = "macos")]
 pub const SHIFT: usize = 1 << 17;
+#[cfg(target_os = "macos")]
 pub const CONTROL: usize = 1 << 18;
+#[cfg(target_os = "macos")]
 pub const OPTION: usize = 1 << 19;
+#[cfg(target_os = "macos")]
 pub const COMMAND: usize = 1 << 20;
 
+/// GDK modifier masks (`GdkModifierType`).
+#[cfg(not(target_os = "macos"))]
+pub const SHIFT: usize = 1 << 0;
+#[cfg(not(target_os = "macos"))]
+pub const CONTROL: usize = 1 << 2;
+#[cfg(not(target_os = "macos"))]
+pub const OPTION: usize = 1 << 3;
+#[cfg(not(target_os = "macos"))]
+pub const COMMAND: usize = 1 << 26;
+
+#[cfg(target_os = "macos")]
 fn special_name(key_code: u16) -> Option<&'static str> {
     Some(match key_code {
         36 => "ENTER",
@@ -36,6 +51,40 @@ fn special_name(key_code: u16) -> Option<&'static str> {
         126 => "UP",
         _ => return None,
     })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn special_name(key_code: u16) -> Option<&'static str> {
+    Some(match key_code {
+        0x0020 => "SPACE",
+        0xff08 => "BS",
+        0xff09 | 0xfe20 => "TAB",
+        0xff0d | 0xff8d => "ENTER",
+        0xff1b => "ESC",
+        0xff50 => "HOME",
+        0xff51 => "LEFT",
+        0xff52 => "UP",
+        0xff53 => "RIGHT",
+        0xff54 => "DOWN",
+        0xff55 => "PGUP",
+        0xff56 => "PGDWN",
+        0xff57 => "END",
+        0xffff => "DEL",
+        _ => return None,
+    })
+}
+
+fn is_non_printable_platform_key(key_code: u16, c: char) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = key_code;
+        ('\u{f700}'..='\u{f8ff}').contains(&c)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = c;
+        (0xfe00..=0xffff).contains(&key_code)
+    }
 }
 
 /// `characters` is `charactersIgnoringModifiers`, which still reflects Shift.
@@ -58,8 +107,10 @@ pub fn key_action(key_code: u16, characters: &str, modifiers: usize) -> KeyActio
         None => match characters.chars().next() {
             // mpv spells this one out because `#` starts a comment.
             Some('#') => "SHARP".to_owned(),
-            // The private-use range is where AppKit puts function keys.
-            Some(c) if !c.is_control() && !('\u{f700}'..='\u{f8ff}').contains(&c) => c.to_string(),
+            // Platform function keys must not be forwarded as text.
+            Some(c) if !c.is_control() && !is_non_printable_platform_key(key_code, c) => {
+                c.to_string()
+            }
             _ => return KeyAction::Ignore,
         },
     };
@@ -92,6 +143,7 @@ mod tests {
         KeyAction::Forward(name.to_owned())
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn special_and_printable_keys() {
         assert_eq!(key_action(49, " ", 0), forward("SPACE"));
@@ -101,6 +153,7 @@ mod tests {
         assert_eq!(key_action(122, "\u{f704}", 0), KeyAction::Ignore);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn dangerous_defaults_are_intercepted() {
         assert_eq!(key_action(53, "\u{1b}", 0), KeyAction::Close);
@@ -110,5 +163,27 @@ mod tests {
         assert_eq!(key_action(1, "s", CONTROL), KeyAction::Ignore);
         assert_eq!(key_action(13, "w", COMMAND), KeyAction::Close);
         assert_eq!(key_action(3, "f", 0), KeyAction::ToggleFullscreen);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn special_and_printable_keys_linux() {
+        assert_eq!(key_action(0x0020, " ", 0), forward("SPACE"));
+        assert_eq!(key_action(0xff51, "", SHIFT), forward("Shift+LEFT"));
+        assert_eq!(key_action(0x006d, "m", 0), forward("m"));
+        assert_eq!(key_action(0x0023, "#", SHIFT), forward("SHARP"));
+        assert_eq!(key_action(0xffbe, "", 0), KeyAction::Ignore);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn dangerous_defaults_are_intercepted_linux() {
+        assert_eq!(key_action(0xff1b, "\u{1b}", 0), KeyAction::Close);
+        assert_eq!(key_action(0x0071, "q", 0), KeyAction::Close);
+        assert_eq!(key_action(0x0051, "Q", SHIFT), KeyAction::Close);
+        assert_eq!(key_action(0x0073, "s", 0), KeyAction::Ignore);
+        assert_eq!(key_action(0x0073, "s", CONTROL), KeyAction::Ignore);
+        assert_eq!(key_action(0x0077, "w", COMMAND), KeyAction::Close);
+        assert_eq!(key_action(0x0066, "f", 0), KeyAction::ToggleFullscreen);
     }
 }

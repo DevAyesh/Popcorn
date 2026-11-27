@@ -27,6 +27,7 @@ pub fn run() {
             std::fs::create_dir_all(data_dir.join("images"))?;
             let db = db::open(&data_dir.join("popcorn.db"))?;
             app.manage(AppState::new(db, data_dir));
+            player::setup(app.handle());
             if let Err(error) = jobs::start_watcher(app.handle()) {
                 log::warn!("not watching the media folder: {error}");
             }

@@ -26,6 +26,13 @@ notify-debouncer-full = { version = "0.8", default-features = false, features = 
 ureq = { version = "3", default-features = false, features = ["rustls", "gzip"] }
 log = { version = "0.4", features = ["std"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gdk = "0.18"
+gio = "0.18"
+glib = "0.18"
+gtk = "0.18"
+webkit2gtk = "2.0"
+
 [profile.release]
 opt-level = "s"
 lto = true
