@@ -55,6 +55,7 @@ img { display: block; max-width: 100%; }
 .search { position: relative; display: flex; align-items: center; }
 .search > .icon { position: absolute; left: 12px; width: 18px; height: 18px; color: var(--smoke); pointer-events: none; }
 .search input { width: 220px; height: 38px; padding: 0 44px 0 38px; border-radius: 999px; border: 1px solid var(--line); background: rgb(var(--c-curtain) / .7); font-size: 14px; transition: width .3s var(--ease), border-color .2s, background .2s; }
+.search.search-wide input { width: 254px; padding-right: 64px; }
 .search input::placeholder { color: var(--dim); }
 .search input:focus { width: 300px; border-color: rgb(var(--c-butter) / .6); background: var(--curtain); outline: none; }
 .search kbd { position: absolute; right: 10px; font: 500 11px/1 var(--text); color: var(--dim); border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; pointer-events: none; }
